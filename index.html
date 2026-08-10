@@ -16,6 +16,7 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:#1b1611;color:#efe3cc;font-family:'Archivo',system-ui,sans-serif;
   padding:16px 14px calc(20px + env(safe-area-inset-bottom));overscroll-behavior-y:contain}
 .wrap{max-width:1180px;margin:0 auto}
+#vhProbe{position:fixed;top:0;left:0;width:0;height:100lvh;visibility:hidden;pointer-events:none}
 h1{font-family:'Fraunces',Georgia,serif;font-size:22px;font-weight:800;margin:0 0 3px;line-height:1.15}
 .sub{font-size:12.5px;color:#a08a63;margin:0 0 16px;line-height:1.55}
 .app{display:flex;gap:22px;align-items:flex-start}
@@ -55,6 +56,8 @@ input[type=color]{width:100%;height:40px;padding:2px;border:1px solid #4a3b2c;bo
 .chipb[aria-pressed=true]{background:#B08A50;border-color:#B08A50;color:#1b1611}
 .btn{display:block;width:100%;padding:13px;border-radius:8px;border:0;cursor:pointer;font-family:inherit;
   font-size:14px;font-weight:800;margin-top:8px;min-height:46px}
+.btnRow{display:flex;gap:8px;padding:2px 15px 15px}
+.btnRow .btn{margin-top:0;padding:9px 10px;min-height:38px;font-size:13px}
 .btn.primary{background:#8E1F3C;color:#fff}
 .btn.wa{background:#25D366;color:#08341a}
 .btn.ghost{background:#3a2e23;color:#e9d9ba}
@@ -75,8 +78,8 @@ input[type=color]{width:100%;height:40px;padding:2px;border:1px solid #4a3b2c;bo
 .rowEd .fields input:first-child{flex:1 1 auto;min-width:0}
 .rowEd .fields input:last-child{flex:0 0 96px;text-align:center}
 
-/* barra fija de acciones (móvil) */
-.actions{display:none}
+/* la cabecera de pestañas se queda fija bajo la vista previa */
+.ptabsFix{position:sticky;z-index:25}
 
 /* hoja de edición para móvil */
 .sheet{position:fixed;inset:0;z-index:60;background:rgba(8,5,3,.30);display:flex;align-items:flex-end}
@@ -92,7 +95,6 @@ input[type=color]{width:100%;height:40px;padding:2px;border:1px solid #4a3b2c;bo
   font-family:inherit;font-size:16px;line-height:1.4;resize:none}
 .sheetActions{display:flex;gap:9px;margin-top:10px}
 .sheetActions .btn{margin-top:0}
-body.sheetOpen .actions{display:none}
 
 /* en móvil se toca el texto y se edita desde la hoja */
 body.mobile:not(.exporting) .card [data-f],
@@ -203,24 +205,24 @@ body.exporting .uiOnly{display:none!important}
 
 /* ================= MÓVIL Y TABLETA ================= */
 @media(max-width:900px){
-  body{padding:12px 10px calc(96px + env(safe-area-inset-bottom))}
+  body{padding:12px 10px calc(24px + env(safe-area-inset-bottom))}
   h1{font-size:19px}
   .sub{font-size:12px;margin-bottom:12px}
-  .app{flex-direction:column;gap:12px}
-  .left{width:100%;position:sticky;top:0;z-index:30;background:#1b1611;
-    padding:8px 0 9px;box-shadow:0 10px 18px -12px rgba(0,0,0,.9)}
-  .right{width:100%;flex:1 1 auto}
+  .app{flex-direction:column;gap:10px}
+  .left{position:sticky;top:0;z-index:30;background:#1b1611;padding:7px 0 8px;
+    width:100vw;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);
+    box-shadow:0 10px 18px -12px rgba(0,0,0,.9)}
+  .right{width:100%;flex:1 1 auto;overflow:visible}
   .pane{padding:14px 13px}
-  .actions{display:flex;gap:9px;position:fixed;left:0;right:0;bottom:0;z-index:40;
-    background:#100d0a;border-top:1px solid #3a2e23;
-    padding:9px 12px calc(9px + env(safe-area-inset-bottom))}
-  .actions .btn{margin-top:0}
+  .btnRow{padding:4px 13px 14px}
+  .ptabsFix{border-radius:12px 12px 0 0;box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
 }
 @media(min-width:901px){
   .left{position:sticky;top:16px}
 }
 </style>
 
+<div id="vhProbe" aria-hidden="true"></div>
 <div class="wrap">
   <h1>Generador de imágenes · Amaranto Morelia</h1>
   <p class="sub">Arrastra la foto para encuadrarla y júntala con dos dedos para acercarla. Ajusta logo, tipografía y color, y descarga o envía por WhatsApp.</p>
@@ -232,7 +234,7 @@ body.exporting .uiOnly{display:none!important}
     </div>
 
     <div class="right">
-      <div class="ptabs" role="tablist">
+      <div class="ptabs ptabsFix" role="tablist">
         <button type="button" class="ptab" role="tab" id="tab-fmt" aria-controls="pane-fmt" aria-selected="true" data-p="fmt">Formato</button>
         <button type="button" class="ptab" role="tab" id="tab-foto" aria-controls="pane-foto" aria-selected="false" data-p="foto">Foto</button>
         <button type="button" class="ptab" role="tab" id="tab-txt" aria-controls="pane-txt" aria-selected="false" data-p="txt">Textos</button>
@@ -326,17 +328,12 @@ body.exporting .uiOnly{display:none!important}
         <p class="hint">La foto no se guarda en la configuración: esa se sube cada vez.</p>
       </div>
 
-      <div style="padding:0 15px 15px">
-        <button type="button" class="btn primary" id="dl">Descargar imagen</button>
-        <button type="button" class="btn wa" id="wa">Enviar por WhatsApp</button>
+      <div class="btnRow">
+        <button type="button" class="btn primary" id="dl">Descargar</button>
+        <button type="button" class="btn wa" id="wa">WhatsApp</button>
       </div>
     </div>
   </div>
-</div>
-
-<div class="actions">
-  <button type="button" class="btn primary" id="dl2">Descargar</button>
-  <button type="button" class="btn wa" id="wa2">WhatsApp</button>
 </div>
 
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
@@ -877,16 +874,23 @@ document.querySelectorAll('.ptabs [data-p]').forEach(function(b){
 });
 
 /* ---------- ajuste de vista ---------- */
+var vhProbe=document.getElementById('vhProbe');
+function refHeight(){
+  var p=vhProbe?vhProbe.offsetHeight:0;
+  return p>200 ? p : window.innerHeight;
+}
+var tabsBar=document.querySelector('.right > .ptabs'), leftCol=document.querySelector('.left');
 function fit(){
   var sz=SIZES[S.size], appW=document.querySelector('.app').clientWidth||320, m=isMobile();
-  var availW = m ? appW : Math.max(240, Math.min(560, appW-360));
-  var availH = m ? Math.max(240, window.innerHeight*0.62) : Math.max(300, window.innerHeight-140);
+  var availW = m ? (window.innerWidth||appW)*0.99 : Math.max(240, Math.min(560, appW-360));
+  var availH = m ? Math.max(240, refHeight()*0.62) : Math.max(300, window.innerHeight-140);
   preview=Math.min(1, availW/sz.w, availH/sz.h);
   frame.style.width=sz.w+'px';
   frame.style.height=sz.h+'px';
   frame.style.transform='scale('+preview+')';
   hold.style.width=Math.round(sz.w*preview)+'px';
   hold.style.height=Math.round(sz.h*preview)+'px';
+  if(tabsBar) tabsBar.style.top = m ? (leftCol.offsetHeight+'px') : '';
 }
 var rt;
 window.addEventListener('resize',function(){
@@ -925,9 +929,9 @@ function busy(btns,fn){
   return fn().catch(function(){ alert('No se pudo generar la imagen. Si estás en HD, prueba desactivándolo, o toma una captura de pantalla.'); })
     .then(function(){ btns.forEach(function(b,i){ b.textContent=lbls[i]; b.disabled=false; }); });
 }
-function doDownload(){ busy([D1,D2],function(){ return renderBlob().then(function(bl){ dlBlob(fileName(),bl); }); }); }
+function doDownload(){ busy([D1],function(){ return renderBlob().then(function(bl){ dlBlob(fileName(),bl); }); }); }
 function doWhats(){
-  busy([W1,W2],function(){
+  busy([W1],function(){
     return renderBlob().then(function(bl){
       var txt=caption(),fn=fileName(),file=null;
       try{ file=new File([bl],fn,{type:'image/png'}); }catch(e){}
@@ -944,9 +948,9 @@ function waFallback(bl,fn,txt){
   window.open('https://wa.me/'+WA_TO+'?text='+encodeURIComponent(txt),'_blank');
   alert('Tu navegador no permite adjuntar la imagen automáticamente.\n\nYa se descargó la imagen y se abrió el chat de WhatsApp con el texto listo: solo adjunta el archivo descargado y elige la calidad HD.');
 }
-var D1=document.getElementById('dl'),D2=document.getElementById('dl2'),W1=document.getElementById('wa'),W2=document.getElementById('wa2');
-D1.onclick=D2.onclick=doDownload;
-W1.onclick=W2.onclick=doWhats;
+var D1=document.getElementById('dl'),W1=document.getElementById('wa');
+D1.onclick=doDownload;
+W1.onclick=doWhats;
 
 document.addEventListener('paste',function(e){
   if(!e.target.isContentEditable) return;
