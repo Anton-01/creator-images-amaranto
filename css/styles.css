@@ -136,8 +136,11 @@ body.exporting .uiOnly{display:none!important}
 .menu{padding:calc(22px*var(--u))}
 .menu::before{content:"";position:absolute;inset:calc(10px*var(--u));border:1px solid var(--c-brand);opacity:.45;pointer-events:none;z-index:1}
 .mHead{display:flex;justify-content:space-between;align-items:center;gap:calc(10px*var(--u));position:relative;z-index:2}
+/* `position:relative` hace del sello el marco de referencia con el que app.js
+   mide a qué altura va cada renglón para recortarlo al ancho del círculo. */
 .seal{flex:0 0 auto;width:calc(74px*var(--u));height:calc(74px*var(--u));border-radius:50%;background:var(--c-badge);
-  color:var(--c-badgeTx);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1}
+  color:var(--c-badgeTx);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1;
+  position:relative}
 .seal .k{font-size:calc(7.5px*var(--s-body)*var(--u));letter-spacing:.2em;text-transform:uppercase;opacity:.85}
 .seal .d{font-size:calc(15px*var(--s-price)*var(--u));font-weight:800;margin:calc(4px*var(--u)) 0 calc(3px*var(--u));text-transform:uppercase}
 .seal .n{font-size:calc(9px*var(--s-body)*var(--u));opacity:.88}

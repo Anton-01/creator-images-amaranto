@@ -84,9 +84,44 @@
     "Mole y maíz": { "c-bg": "#F3D9A4", "c-tx": "#3B1F14", "c-acc": "#6B2412", "c-accTx": "#F8E9C6", "c-brand": "#8A4A22", "c-badge": "#3B1F14", "c-badgeTx": "#F3D9A4", "c-band": "#E7C787" }
   };
 
+  /* ---------- fecha en curso ---------- */
+
+  /* Respaldo por si el navegador no trae los datos de idioma (ICU recortado). */
+  var DAYS_ES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  var MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+  /** Nombre del día en curso con mayúscula inicial: "Miércoles". */
+  function dayName(date) {
+    var d = date || new Date();
+    var s = "";
+    try {
+      s = d.toLocaleDateString("es-MX", { weekday: "long" });
+    } catch (err) { /* sin soporte de idioma */ }
+    if (!s || /\d/.test(s)) s = DAYS_ES[d.getDay()];
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  /** Día y mes en curso: "12 ago". */
+  function dateLabel(date) {
+    var d = date || new Date();
+    var s = "";
+    try {
+      s = d.toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+    } catch (err) { /* sin soporte de idioma */ }
+    if (!s) return d.getDate() + " " + MONTHS_ES[d.getMonth()];
+    /* Algunos navegadores devuelven "12 de ago" o "12 ago."; se deja en "12 ago". */
+    return s.replace(/\s+de\s+/i, " ").replace(/\.$/, "");
+  }
+
+  /** Identificador del día, para notar que la página cruzó la medianoche abierta. */
+  function dayStamp(date) {
+    var d = date || new Date();
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  }
+
   /* ---------- textos ---------- */
   var DEF_TEXTS = {
-    sealK: "Guiso de", sealDay: "Martes", sealDate: "11 ago",
+    sealK: "Guiso de", sealDay: dayName(), sealDate: dateLabel(),
     heroEb: "Hoy en la olla", heroName: "Chuleta ahumada en chile pasilla", ruleLabel: "Guisos del día",
     incl: "Incluye, a elegir: arroz rojo, frijoles refritos o sopa fría. También ½ litro de arroz o frijol $25 y galleta de chocolate $40.",
     ctaA: "Pide y te lo dejamos", ctaB: "listo y calientito", tel: "443 887 8865",
@@ -195,6 +230,11 @@
     DEF_ROWS: DEF_ROWS,
     RANGES: RANGES,
     LIMITS: LIMITS,
+    /** Campos del sello que se rellenan solos con la fecha en curso. */
+    AUTO_DATE_FIELDS: { sealDay: dayName, sealDate: dateLabel },
+    dayName: dayName,
+    dateLabel: dateLabel,
+    dayStamp: dayStamp,
     clone: clone,
     defState: defState
   };

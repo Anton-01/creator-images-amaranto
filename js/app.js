@@ -101,8 +101,10 @@
 
     /* Al cerrar u ocultar la pestaña se escribe lo que quedara pendiente. */
     global.addEventListener("pagehide", function () { Storage.flush(S); });
+    global.addEventListener("beforeunload", function () { Storage.flush(S); });
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "hidden") Storage.flush(S);
+      else refreshDateIfStale();
     });
   }
 
@@ -244,7 +246,7 @@
     }
     $("stageNote").textContent = TPLNAME[S.tpl] + " · " + SIZES[S.size].label.split(" · ")[0] +
       (MOBILE ? " · toca un texto para editarlo" : "");
-    requestAnimationFrame(function () { paintLogos(); initSlots(); applyOverlay(); fit(); });
+    requestAnimationFrame(function () { paintLogos(); initSlots(); applyOverlay(); fit(); fitSeal(); });
   }
 
   function renderRows() {
@@ -346,6 +348,178 @@
     });
   }
 
+  /* ---------- recorte del texto dentro del sello ---------- */
+
+  /**
+   * El sello es un círculo de tamaño fijo. A la altura de cada renglón el hueco
+   * no es el diámetro sino la cuerda del círculo, 2·√(R² − dy²), donde `dy` es la
+   * distancia del renglón al centro. Si el texto no cabe se corta por la última
+   * letra que entra: ni se agranda el círculo ni se achica la letra.
+   */
+  var SEAL_LINES = ["k", "d", "n"];
+  /**
+   * Holgura, como fracción del radio. Con 0 el texto cabría pero pegado al borde
+   * ("DOMINGO" toca el círculo por los dos lados y se ve apretado), así que se
+   * reserva un poco de aire antes de dar por buena una letra.
+   */
+  var SEAL_INSET = 0.06;
+
+  /*
+   * Se mide sobre un <canvas> y no sobre el DOM porque lo que importa es la
+   * TINTA de las letras, no su avance. El avance incluye el hueco lateral de la
+   * primera y la última letra, y contarlo recortaba palabras que sí caben
+   * ("Domingo" mide 73.3 px de avance pero sólo 72.7 px de tinta).
+   * De paso el canvas da el alto real de la tinta, más ajustado que la caja del
+   * renglón, que reserva sitio para tildes y colas aunque no las haya.
+   */
+  var inkCtx = null;
+  var inkSpacing = 0;       // letter-spacing en px
+  var inkNativeSpacing = false;
+  var inkCase = "none";     // text-transform, que el canvas no aplica solo
+
+  /** Ajusta el canvas de medición a la tipografía exacta del renglón. */
+  function setupInk(el) {
+    if (inkCtx === null) {
+      var c = document.createElement("canvas");
+      inkCtx = (c.getContext && c.getContext("2d")) || false;
+    }
+    if (!inkCtx) return false;
+
+    var cs = getComputedStyle(el);
+    inkCtx.font = [cs.fontStyle, cs.fontWeight, cs.fontSize, cs.fontFamily].join(" ");
+    var ls = parseFloat(cs.letterSpacing);
+    inkSpacing = isFinite(ls) ? ls : 0;
+    inkNativeSpacing = ("letterSpacing" in inkCtx);
+    if (inkNativeSpacing) inkCtx.letterSpacing = inkSpacing + "px";
+    inkCase = cs.textTransform;
+    return true;
+  }
+
+  function inkText(text) {
+    if (inkCase === "uppercase") return text.toUpperCase();
+    if (inkCase === "lowercase") return text.toLowerCase();
+    return text;
+  }
+
+  /** Ancho de la tinta del texto. */
+  function inkWidth(text) {
+    if (!text) return 0;
+    var t = inkText(text);
+    var m = inkCtx.measureText(t);
+    var w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+    if (!isFinite(w)) w = m.width;
+    /* Si el navegador no aplica letter-spacing en el canvas, se suma a mano:
+       separa n−1 huecos, el de después de la última letra no ocupa tinta. */
+    if (!inkNativeSpacing && inkSpacing) w += inkSpacing * Math.max(0, t.length - 1);
+    return w;
+  }
+
+  /** Borde superior e inferior de la tinta dentro de la caja del renglón. */
+  function inkVertical(el, text) {
+    var box = el.offsetHeight;
+    var m = inkCtx.measureText(inkText(text) || "M");
+    if (typeof m.actualBoundingBoxAscent !== "number" ||
+        typeof m.fontBoundingBoxAscent !== "number" || !isFinite(m.fontBoundingBoxAscent)) {
+      return { top: 0, bottom: box };   // sin métricas: se usa la caja entera
+    }
+    var halfLeading = (box - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2;
+    var baseline = halfLeading + m.fontBoundingBoxAscent;
+    return { top: baseline - m.actualBoundingBoxAscent, bottom: baseline + m.actualBoundingBoxDescent };
+  }
+
+  /**
+   * ¿Cabe `text` en el círculo? La esquina de la tinta más lejana al centro es la
+   * que manda: a esa altura el hueco es la cuerda 2·√(R² − dy²), no el diámetro.
+   */
+  function fitsInCircle(text, el, lineTop, R, cy) {
+    var v = inkVertical(el, text);
+    var dy = Math.max(Math.abs(lineTop + v.top - cy), Math.abs(lineTop + v.bottom - cy));
+    if (dy >= R) return false;
+    return inkWidth(text) <= 2 * Math.sqrt(R * R - dy * dy) - R * SEAL_INSET;
+  }
+
+  /** Recorta `full` a lo que quepa en el círculo y lo escribe en el elemento. */
+  function clipToCircle(sealEl, el, full) {
+    var R = sealEl.offsetWidth / 2;
+    if (!R || !el.offsetHeight || !setupInk(el)) { el.textContent = full; return; }
+
+    var cy = sealEl.offsetHeight / 2;
+    var lineTop = el.offsetTop;
+    if (fitsInCircle(full, el, lineTop, R, cy)) { el.textContent = full; return; }
+
+    /* Búsqueda binaria del corte más largo que entra. */
+    var lo = 0, hi = full.length;
+    while (lo < hi) {
+      var mid = Math.ceil((lo + hi) / 2);
+      if (fitsInCircle(full.slice(0, mid), el, lineTop, R, cy)) lo = mid; else hi = mid - 1;
+    }
+    el.textContent = full.slice(0, lo).replace(/\s+$/, "");
+  }
+
+  /** Reajusta los tres renglones del sello. Salta el que se esté editando. */
+  function fitSeal() {
+    card.querySelectorAll(".seal").forEach(function (sealEl) {
+      SEAL_LINES.forEach(function (cls) {
+        var el = sealEl.querySelector("." + cls);
+        if (!el || el === document.activeElement) return;
+        var key = el.dataset.f;
+        var full = (key && S.texts[key] !== undefined) ? S.texts[key] : el.textContent;
+        clipToCircle(sealEl, el, full);
+      });
+    });
+  }
+
+  var fitQueued = false;
+  /** Agrupa varias peticiones de reajuste en un solo cuadro. */
+  function scheduleSealFit() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(function () { fitQueued = false; fitSeal(); });
+  }
+
+  function wireSealFit() {
+    /* Cualquier cambio de texto puede afectar al sello. Si el renglón se está
+       escribiendo directamente sobre la imagen no se toca, para no mover el
+       cursor de sitio: se recorta al salir del campo. */
+    document.addEventListener("input", function (e) {
+      if (e.target && e.target.closest && e.target.closest(".seal")) return;
+      scheduleSealFit();
+    }, true);
+    document.addEventListener("focusout", function (e) {
+      if (e.target && e.target.closest && e.target.closest(".seal")) scheduleSealFit();
+    }, true);
+  }
+
+  /* ---------- día y fecha automáticos ---------- */
+
+  var autoDateStamp = null;
+
+  /** Pone en el estado el día y la fecha en curso, pisando lo que hubiera guardado. */
+  function applyTodayToState() {
+    Object.keys(CFG.AUTO_DATE_FIELDS).forEach(function (key) {
+      S.texts[key] = CFG.AUTO_DATE_FIELDS[key]();
+    });
+    autoDateStamp = CFG.dayStamp();
+  }
+
+  /** Vuelca esos campos al lienzo y al panel de textos, ya recortados. */
+  function paintDateFields() {
+    Object.keys(CFG.AUTO_DATE_FIELDS).forEach(function (key) {
+      card.querySelectorAll('[data-f="' + key + '"]').forEach(function (t) { t.textContent = S.texts[key]; });
+      var inp = document.querySelector('#txtList [data-tf="' + key + '"]');
+      if (inp) inp.value = S.texts[key];
+    });
+    fitSeal();
+  }
+
+  /** Si la página se quedó abierta y ya cambió el día, se pone al corriente sola. */
+  function refreshDateIfStale() {
+    if (autoDateStamp === CFG.dayStamp()) return;
+    applyTodayToState();
+    paintDateFields();
+    persistSoon();
+  }
+
   function applyColors() {
     for (var k in S.colors) card.style.setProperty("--" + k, S.colors[k]);
   }
@@ -359,6 +533,7 @@
       card.style.setProperty("--t-" + r, (f.t / 1000) + "em");
       card.style.setProperty("--u-" + r, f.up ? "uppercase" : "none");
     });
+    scheduleSealFit();   // otra tipografía ocupa otro ancho
   }
 
   function applyOverlay() {
@@ -1026,12 +1201,14 @@
     var dlBtn = $("dl"), waBtn = $("wa");
 
     dlBtn.onclick = function () {
+      persistNow();          // la imagen que se descarga queda guardada tal cual
       busy([dlBtn], function () {
         return renderBlob().then(function (bl) { dlBlob(fileName(), bl); });
       });
     };
 
     waBtn.onclick = function () {
+      persistNow();
       busy([waBtn], function () {
         return renderBlob().then(function (bl) {
           var txt = caption(), fn = fileName(), file = null;
@@ -1073,6 +1250,10 @@
     wirePanelTabs();
     wireViewport();
     wireExport();
+    wireSealFit();
+
+    /* El día y la fecha mandan sobre lo guardado: siempre son los de hoy. */
+    applyTodayToState();
 
     syncControlsFromState();
     render();
@@ -1085,6 +1266,7 @@
       document.fonts.ready.then(function () {
         fit();
         paintLogos();
+        fitSeal();
         var el = slot();
         if (el && photo.url) paint(el);
       });
