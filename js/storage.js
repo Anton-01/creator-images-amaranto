@@ -327,9 +327,13 @@
     }, AUTOSAVE_DELAY);
   }
 
-  /** Escribe de inmediato lo que hubiera pendiente (al cerrar u ocultar la página). */
+  /**
+   * Escribe de inmediato al cerrar u ocultar la página. No mira si había un
+   * guardado pendiente: se llama en el último momento útil y `save()` ya se
+   * ahorra el trabajo cuando nada cambió.
+   */
   function flush(state) {
-    if (saveTimer) save(state);
+    save(state);
   }
 
   Amaranto.Storage = {
